@@ -17,6 +17,7 @@ const callbacks = new Set(['/', '/index.html'].map(path => new URL(path, origin)
 const assets = new Map([
   ['/', ['index.html', 'text/html']],
   ['/index.html', ['index.html', 'text/html']],
+  ['/troubleshooting.html', ['troubleshooting.html', 'text/html']],
   ['/console.css', ['console.css', 'text/css']],
   ['/console.js', ['console.js', 'text/javascript']],
   ['/oauth-regions.js', ['oauth-regions.js', 'text/javascript']],
