@@ -18,6 +18,7 @@
           <label>Token name<input id="token-name" maxlength="80" placeholder="Genesys Cloud"></label>
           <label>Grant type<select id="grant">
             <option value="pkce">Authorization Code with PKCE</option>
+            <option id="credentials-grant" value="credentials" disabled>Client Credentials (requires Node.js)</option>
             <option id="code-grant" value="code" disabled>Authorization Code (requires Node.js)</option>
           </select></label>
           <label>Access token URL<input id="token-url" type="url" list="token-urls" placeholder="https://login.mypurecloud.com/oauth/token" required spellcheck="false"></label>
@@ -25,6 +26,7 @@
           <label>Client ID<input id="client" required spellcheck="false" autocomplete="off"></label>
           <label>Client secret<input id="secret" type="password" autocomplete="off" disabled></label>
         </div>
+        <label id="scope-field" hidden>Scope (optional)<input id="scope" placeholder="Space-separated scopes" disabled></label>
         <p id="grant-help"></p>
         <div class="actions">
           <button id="sign-in">Connect to Genesys Cloud</button>
