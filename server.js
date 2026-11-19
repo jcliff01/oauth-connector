@@ -96,6 +96,9 @@ const server = createServer(async (req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   const path = req.url.split('?')[0];
+  if (req.method === 'GET' && path === '/oauth/code') {
+    return json(res, 200, { authorizationCode: true });
+  }
   if (req.method === 'POST' && path === '/oauth/code') {
     if (req.headers.origin !== origin.origin || req.headers['content-type'] !== 'application/json') {
       return json(res, 403, { error: 'Use the configured portal origin.' });
