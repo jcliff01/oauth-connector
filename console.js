@@ -1,35 +1,23 @@
-const regions = new Set([
-  'mypurecloud.com', 'usw2.pure.cloud', 'cac1.pure.cloud', 'sae1.pure.cloud',
-  'mxc1.pure.cloud', 'mypurecloud.ie', 'mypurecloud.de', 'euw2.pure.cloud',
-  'euc2.pure.cloud', 'mec1.pure.cloud', 'aps1.pure.cloud', 'apse1.pure.cloud',
-  'mypurecloud.com.au', 'mypurecloud.jp', 'apne2.pure.cloud', 'apne3.pure.cloud',
-  'use2.us-gov-pure.cloud', 'edee1.eusc-pure.cloud',
-]);
+import { parseTokenUrl, regions } from './oauth-regions.js';
+
 const transactionKey = 'genesys-api-console:oauth';
 const byId = (id) => document.getElementById(id);
 const redirectUri = new URL(location.pathname, location.origin).href;
-const regionInput = byId('region');
+const tokenNameInput = byId('token-name');
+const grantInput = byId('grant');
+const tokenUrlInput = byId('token-url');
+const secretInput = byId('secret');
+const codeEndpoint = './oauth/code';
 const clientInput = byId('client');
 const methodInput = byId('method');
 let connection;
 let expirationTimer;
 let busy = false;
 
-byId('redirect').value = redirectUri;
 for (const region of regions) {
   const option = document.createElement('option');
-  option.value = region;
-  byId('regions').append(option);
-}
-
-function regionFrom(input) {
-  const value = input.trim().toLowerCase();
-  const url = new URL(value.includes('://') ? value : `https://${value}`);
-  const region = url.hostname.replace(/^(apps|login|api)\./, '');
-  if (url.protocol !== 'https:' || url.port || url.username || url.password || !regions.has(region)) {
-    throw new Error('Enter a supported Genesys Cloud region or instance URL.');
-  }
-  return region;
+  option.value = `https://login.${region}/oauth/token`;
+  byId('token-urls').append(option);
 }
 
 function randomValue() {
@@ -50,8 +38,11 @@ function syncControls() {
   byId('verify').disabled = busy || !connection;
   byId('disconnect').disabled = busy || !connection;
   byId('send').disabled = busy || !connection;
-  regionInput.disabled = busy || Boolean(connection);
-  clientInput.disabled = busy || Boolean(connection);
+  const locked = busy || Boolean(connection);
+  for (const input of [tokenNameInput, grantInput, tokenUrlInput, clientInput]) {
+    input.disabled = locked;
+  }
+  secretInput.disabled = locked || grantInput.value !== 'code';
 }
 
 function clearConnection() {
@@ -102,7 +93,7 @@ async function sendRequest(path, method = 'GET', body) {
 async function verify() {
   const { response, parsed } = await sendRequest('/api/v2/users/me');
   if (connection && response.ok && typeof parsed?.id === 'string') {
-    setStatus(`Verified · ${parsed.name || parsed.id} · ${connection.region}`);
+    setStatus(`Verified · ${connection.name} · ${parsed.name || parsed.id} · ${connection.region}`);
   } else if (connection && response.status !== 401) {
     setStatus(`Connection verification failed (HTTP ${response.status}). Check client scopes and user permissions.`);
   }
@@ -121,27 +112,79 @@ async function run(task, reportError) {
   }
 }
 
+function syncGrant() {
+  const confidential = grantInput.value === 'code';
+  secretInput.required = confidential;
+  if (!confidential) secretInput.value = '';
+  byId('grant-help').textContent = confidential
+    ? `Register ${redirectUri} as the callback URI. This grant requires the Node.js portal server.`
+    : `Register ${redirectUri} as the callback URI for your PKCE client.`;
+  syncControls();
+}
+
+grantInput.addEventListener('change', syncGrant);
+syncGrant();
+
+async function confidentialRequest(payload) {
+  const response = await fetch(codeEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload), redirect: 'error', signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.headers.get('Content-Type')?.startsWith('application/json')) {
+    throw new Error('Authorization Code requires the Node.js portal server.');
+  }
+  if (!response.ok) {
+    const result = await response.json();
+    throw new Error(result.error || `Authorization Code request failed (HTTP ${response.status}).`);
+  }
+  return response.json();
+}
+
 byId('connect').addEventListener('submit', (event) => {
   event.preventDefault();
+  if (busy || connection) return;
   run(async () => {
-    const region = regionFrom(regionInput.value);
+    const { tokenUrl, authorizationUrl } = parseTokenUrl(tokenUrlInput.value.trim());
     const clientId = clientInput.value.trim();
     if (!clientId) throw new Error('Enter your OAuth client ID.');
     if (!window.isSecureContext) throw new Error('Open this page over HTTPS or localhost.');
     const state = randomValue();
-    const verifier = randomValue();
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-    const url = new URL(`https://login.${region}/oauth/authorize`);
-    url.search = new URLSearchParams({
-      client_id: clientId, response_type: 'code', redirect_uri: redirectUri,
-      state, code_challenge_method: 'S256', code_challenge: base64Url(new Uint8Array(digest)),
+    const grant = grantInput.value;
+    const name = tokenNameInput.value.trim() || 'Genesys Cloud';
+    const transaction = { tokenUrl, clientId, state, grant, name, expiresAt: Date.now() + 600_000 };
+    authorizationUrl.search = new URLSearchParams({
+      client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state,
     });
-    sessionStorage.setItem(transactionKey, JSON.stringify({
-      region, clientId, state, verifier, expiresAt: Date.now() + 600_000,
-    }));
-    location.assign(url.href);
+    if (grant === 'code') {
+      const clientSecret = secretInput.value;
+      secretInput.value = '';
+      const { ticket } = await confidentialRequest({
+        action: 'begin', tokenUrl, clientId, clientSecret, redirectUri, state,
+      });
+      transaction.ticket = ticket;
+    } else {
+      transaction.verifier = randomValue();
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(transaction.verifier));
+      authorizationUrl.searchParams.set('code_challenge_method', 'S256');
+      authorizationUrl.searchParams.set('code_challenge', base64Url(new Uint8Array(digest)));
+    }
+    sessionStorage.setItem(transactionKey, JSON.stringify(transaction));
+    location.assign(authorizationUrl.href);
   }, setStatus);
 });
+
+async function exchangePkce(tokenUrl, transaction, code) {
+  const response = await fetch(tokenUrl, {
+    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', client_id: transaction.clientId,
+      code, code_verifier: transaction.verifier, redirect_uri: redirectUri,
+    }),
+  });
+  if (!response.ok) throw new Error(`Token exchange failed (HTTP ${response.status}). Check the PKCE client and callback URI.`);
+  return response.json();
+}
 
 async function handleCallback(query) {
   const saved = sessionStorage.getItem(transactionKey);
@@ -151,29 +194,27 @@ async function handleCallback(query) {
       || query.getAll('state').length !== 1 || query.get('state') !== transaction.state) {
     throw new Error('This sign-in expired or could not be verified. Connect again.');
   }
-  const region = regionFrom(transaction.region);
-  regionInput.value = region;
+  const { region, tokenUrl } = parseTokenUrl(transaction.tokenUrl);
+  tokenNameInput.value = transaction.name;
+  tokenUrlInput.value = tokenUrl;
   clientInput.value = transaction.clientId;
+  grantInput.value = transaction.grant;
+  syncGrant();
   if (query.has('error')) throw new Error('Genesys Cloud declined authorization.');
   if (query.getAll('code').length !== 1 || !query.get('code')) {
     throw new Error('Genesys Cloud did not return an authorization code.');
   }
 
-  const response = await fetch(`https://login.${region}/oauth/token`, {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
-    body: new URLSearchParams({
-      grant_type: 'authorization_code', client_id: transaction.clientId,
-      code: query.get('code'), code_verifier: transaction.verifier, redirect_uri: redirectUri,
-    }),
-  });
-  if (!response.ok) throw new Error(`Token exchange failed (HTTP ${response.status}). Check the PKCE client and redirect URI.`);
-  const token = await response.json();
+  const code = query.get('code');
+  const token = transaction.grant === 'code'
+    ? await confidentialRequest({ action: 'exchange', ticket: transaction.ticket, state: transaction.state, code })
+    : await exchangePkce(tokenUrl, transaction, code);
   if (typeof token.access_token !== 'string' || !token.access_token
       || typeof token.token_type !== 'string' || token.token_type.toLowerCase() !== 'bearer'
       || !Number.isFinite(token.expires_in) || token.expires_in <= 0) {
     throw new Error('Genesys Cloud returned an invalid token response.');
   }
-  connection = { region, token: token.access_token };
+  connection = { region, name: transaction.name, token: token.access_token };
   expirationTimer = setTimeout(() => {
     clearConnection();
     setStatus('Session expired. Connect again.');
