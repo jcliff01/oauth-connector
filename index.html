@@ -37,7 +37,8 @@
           <label>Platform API path<input id="path" value="/api/v2/users/me" required spellcheck="false" aria-describedby="path-help"></label>
         </div>
         <p id="path-help">Copy the path from API Explorer. Replace path parameters and append any query string.</p>
-        <label id="body-field" hidden>JSON body<textarea id="body" rows="5" spellcheck="false" placeholder='{"name": "Example"}'></textarea></label>
+        <label id="body-field">Message body (optional)<textarea id="body" disabled aria-describedby="body-help" rows="5" spellcheck="false" placeholder='{"name": "Example"}'></textarea></label>
+        <p id="body-help">Select POST, PUT, PATCH, or DELETE to include a JSON body.</p>
         <div class="actions"><button id="send" disabled>Send request</button></div>
       </form>
     </section>
