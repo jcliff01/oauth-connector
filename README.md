@@ -62,6 +62,14 @@ shown below the form in your Genesys Cloud OAuth client.
   so each authorization callback reaches the process holding its pending grant.
   The server clears pending client secrets after exchange or within ten minutes.
 
-After signing in, the console verifies the session via `GET /api/v2/users/me`.
+- **Client Credentials** uses the same Node.js server and sends the client ID
+  and secret to the regional token endpoint as HTTP Basic authentication.
+  Select a Genesys Cloud OAuth client configured for Client Credentials, with
+  the roles and divisions required by your API requests. Scope is optional.
+  This grant has no callback URL. The console checks its access using
+  `GET /api/v2/organizations/me`. If this returns 403, the token may still
+  be usable for endpoints allowed by that client's roles.
+
+For user sign-in grants, the console verifies the session via `GET /api/v2/users/me`.
 Tokens stay in browser memory for the console session. Use the request form to
 send API Explorer paths and optional JSON request bodies.

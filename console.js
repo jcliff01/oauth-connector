@@ -7,6 +7,8 @@ const tokenNameInput = byId('token-name');
 const grantInput = byId('grant');
 const tokenUrlInput = byId('token-url');
 const secretInput = byId('secret');
+const scopeInput = byId('scope');
+let credentialsAvailable = false;
 const codeEndpoint = './oauth/code';
 let confidentialAvailable = false;
 const clientInput = byId('client');
@@ -43,7 +45,9 @@ function syncControls() {
   for (const input of [tokenNameInput, grantInput, tokenUrlInput, clientInput]) {
     input.disabled = locked;
   }
-  secretInput.disabled = locked || !confidentialAvailable || grantInput.value !== 'code';
+  const credentials = credentialsAvailable && grantInput.value === 'credentials';
+  secretInput.disabled = locked || !(credentials || (confidentialAvailable && grantInput.value === 'code'));
+  scopeInput.disabled = locked || !credentials;
 }
 
 function clearConnection() {
@@ -92,11 +96,12 @@ async function sendRequest(path, method = 'GET', body) {
 }
 
 async function verify() {
-  const { response, parsed } = await sendRequest('/api/v2/users/me');
+  const endpoint = connection.grant === 'credentials' ? '/api/v2/organizations/me' : '/api/v2/users/me';
+  const { response, parsed } = await sendRequest(endpoint);
   if (connection && response.ok && typeof parsed?.id === 'string') {
     setStatus(`Verified · ${connection.name} · ${parsed.name || parsed.id} · ${connection.region}`);
   } else if (connection && response.status !== 401) {
-    setStatus(`Connection verification failed (HTTP ${response.status}). Check client scopes and user permissions.`);
+    setStatus(`Connection verification failed (HTTP ${response.status}). Check the OAuth client’s roles, scopes, or user permissions.`);
   }
 }
 
@@ -115,11 +120,15 @@ async function run(task, reportError) {
 
 function syncGrant() {
   const confidential = confidentialAvailable && grantInput.value === 'code';
-  secretInput.required = confidential;
-  if (!confidential) secretInput.value = '';
+  const credentials = credentialsAvailable && grantInput.value === 'credentials';
+  secretInput.required = confidential || credentials;
+  if (!secretInput.required) secretInput.value = '';
+  byId('scope-field').hidden = !credentials;
   byId('grant-help').textContent = confidential
     ? `Register ${redirectUri} as the callback URI. This grant requires the Node.js portal server.`
-    : `Register ${redirectUri} as the callback URI for your PKCE client.`;
+    : credentials
+      ? 'The client ID and secret are sent as a Basic Auth header. Client Credentials uses no callback URL.'
+      : `Register ${redirectUri} as the callback URI for your PKCE client.`;
   syncControls();
 }
 
@@ -140,6 +149,12 @@ async function detectConfidentialGrant() {
     const option = byId('code-grant');
     option.disabled = false;
     option.textContent = 'Authorization Code';
+    credentialsAvailable = capability.clientCredentials === true;
+    if (credentialsAvailable) {
+      const option = byId('credentials-grant');
+      option.disabled = false;
+      option.textContent = 'Client Credentials';
+    }
     syncGrant();
   } catch {
     // Static hosts continue to offer PKCE if the backend is unavailable.
@@ -172,9 +187,19 @@ byId('connect').addEventListener('submit', (event) => {
     const clientId = clientInput.value.trim();
     if (!clientId) throw new Error('Enter your OAuth client ID.');
     if (!window.isSecureContext) throw new Error('Open this page over HTTPS or localhost.');
-    const state = randomValue();
     const grant = grantInput.value;
     const name = tokenNameInput.value.trim() || 'Genesys Cloud';
+    if (grant === 'credentials') {
+      if (!credentialsAvailable) throw new Error('Client Credentials requires the Node.js portal server.');
+      const clientSecret = secretInput.value;
+      secretInput.value = '';
+      const token = await confidentialRequest({
+        action: 'credentials', tokenUrl, clientId, clientSecret, scope: scopeInput.value.trim(),
+      });
+      await activateConnection(token, { region: parseTokenUrl(tokenUrl).region, name, grant });
+      return;
+    }
+    const state = randomValue();
     const transaction = { tokenUrl, clientId, state, grant, name, expiresAt: Date.now() + 600_000 };
     authorizationUrl.search = new URLSearchParams({
       client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state,
@@ -233,16 +258,23 @@ async function handleCallback(query) {
   const token = transaction.grant === 'code'
     ? await confidentialRequest({ action: 'exchange', ticket: transaction.ticket, state: transaction.state, code })
     : await exchangePkce(tokenUrl, transaction, code);
+  await activateConnection(token, { region, name: transaction.name, grant: transaction.grant });
+}
+
+async function activateConnection(token, { region, name, grant }) {
   if (typeof token.access_token !== 'string' || !token.access_token
       || typeof token.token_type !== 'string' || token.token_type.toLowerCase() !== 'bearer'
       || !Number.isFinite(token.expires_in) || token.expires_in <= 0) {
     throw new Error('Genesys Cloud returned an invalid token response.');
   }
-  connection = { region, name: transaction.name, token: token.access_token };
+  connection = { region, name, grant, token: token.access_token };
   expirationTimer = setTimeout(() => {
     clearConnection();
     setStatus('Session expired. Connect again.');
   }, token.expires_in * 1000);
+  if (grant === 'credentials' && byId('path').value === '/api/v2/users/me') {
+    byId('path').value = '/api/v2/organizations/me';
+  }
   setStatus('Checking connection…');
   await verify();
 }

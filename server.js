@@ -72,17 +72,38 @@ async function exchange(res, { ticket, code, state }) {
   pending.delete(ticket);
   clearTimeout(grant.timer);
 
+  return requestToken(res, grant, new URLSearchParams({
+    grant_type: 'authorization_code', code, redirect_uri: grant.redirectUri,
+  }));
+}
+
+async function clientCredentials(res, { tokenUrl, clientId, clientSecret, scope }) {
+  if (typeof clientId !== 'string' || !clientId || clientId.includes(':')
+      || typeof clientSecret !== 'string' || !clientSecret || typeof scope !== 'string') {
+    return json(res, 400, { error: 'Check the client ID, client secret, and scope.' });
+  }
+  try {
+    parseTokenUrl(tokenUrl);
+  } catch {
+    return json(res, 400, { error: 'Enter a supported Genesys Cloud token URL.' });
+  }
+  const body = new URLSearchParams({ grant_type: 'client_credentials' });
+  if (scope.trim()) body.set('scope', scope.trim());
+  return requestToken(res, { tokenUrl, clientId, clientSecret }, body);
+}
+
+async function requestToken(res, grant, body) {
   try {
     const basic = Buffer.from(`${grant.clientId}:${grant.clientSecret}`).toString('base64');
     const response = await fetch(grant.tokenUrl, {
-      method: 'POST', headers: { Authorization: `Basic ${basic}` },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code', code, redirect_uri: grant.redirectUri,
-      }),
+      method: 'POST', headers: { Authorization: `Basic ${basic}` }, body,
       signal: AbortSignal.timeout(10_000), redirect: 'error',
     });
     if (!response.ok) {
-      return json(res, 502, { error: `Genesys Cloud rejected the token exchange (HTTP ${response.status}). Check the client ID, secret, and callback URI.` });
+      const settings = body.get('grant_type') === 'client_credentials'
+        ? 'Check the region, Client Credentials grant, client ID, and secret.'
+        : 'Check the client ID, secret, and callback URI.';
+      return json(res, 502, { error: `Genesys Cloud rejected the token exchange (HTTP ${response.status}). ${settings}` });
     }
     const { access_token, token_type, expires_in } = await response.json();
     return json(res, 200, { access_token, token_type, expires_in });
@@ -97,7 +118,7 @@ const server = createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   const path = req.url.split('?')[0];
   if (req.method === 'GET' && path === '/oauth/code') {
-    return json(res, 200, { authorizationCode: true });
+    return json(res, 200, { authorizationCode: true, clientCredentials: true });
   }
   if (req.method === 'POST' && path === '/oauth/code') {
     if (req.headers.origin !== origin.origin || req.headers['content-type'] !== 'application/json') {
@@ -106,6 +127,7 @@ const server = createServer(async (req, res) => {
     try {
       const input = await readJson(req);
       if (input?.action === 'begin') return begin(res, input);
+      if (input?.action === 'credentials') return await clientCredentials(res, input);
       if (input?.action === 'exchange') return await exchange(res, input);
     } catch {
       // Return a generic error without exposing request content.
