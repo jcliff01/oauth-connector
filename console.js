@@ -188,9 +188,16 @@ byId('disconnect').addEventListener('click', () => {
   showResponse('Waiting for a request');
   setStatus('Disconnected');
 });
-methodInput.addEventListener('change', () => {
-  byId('body-field').hidden = methodInput.value === 'GET';
-});
+function syncBodyField() {
+  const isGet = methodInput.value === 'GET';
+  byId('body').disabled = isGet;
+  byId('body-help').textContent = isGet
+    ? 'Select POST, PUT, PATCH, or DELETE to include a JSON body.'
+    : 'Enter valid JSON or leave this blank to send the request without a body.';
+}
+
+methodInput.addEventListener('change', syncBodyField);
+syncBodyField();
 byId('request').addEventListener('submit', (event) => {
   event.preventDefault();
   if (busy || !connection) return;
