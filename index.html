@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Genesys Cloud API Console</title>
+  <link rel="stylesheet" href="./console.css">
+  <script type="module" src="./console.js"></script>
+</head>
+<body>
+  <main>
+    <header><h1>Genesys Cloud API Console</h1><a href="https://developer.genesys.cloud/devapps/api-explorer" target="_blank" rel="noopener noreferrer">API Explorer ↗</a></header>
+    <section aria-labelledby="connection-heading">
+      <h2 id="connection-heading">Connection</h2>
+      <form id="connect">
+        <div class="connection-fields">
+          <label>Region or instance URL<input id="region" list="regions" placeholder="mypurecloud.com" required spellcheck="false"></label>
+          <datalist id="regions"></datalist>
+          <label>OAuth client ID<input id="client" required spellcheck="false" autocomplete="off"></label>
+        </div>
+        <label>Authorized redirect URI<input id="redirect" readonly></label>
+        <p>Register this exact URI on a Genesys Cloud OAuth client configured for PKCE.</p>
+        <div class="actions">
+          <button id="sign-in">Connect to Genesys Cloud</button>
+          <button type="button" id="verify" disabled>Verify connection</button>
+          <button type="button" id="disconnect" disabled>Disconnect</button>
+        </div>
+      </form>
+      <p id="status" role="status">Disconnected</p>
+    </section>
+    <section aria-labelledby="request-heading">
+      <h2 id="request-heading">API request</h2>
+      <form id="request">
+        <div class="request-line">
+          <label>Method<select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
+          <label>Platform API path<input id="path" value="/api/v2/users/me" required spellcheck="false" aria-describedby="path-help"></label>
+        </div>
+        <p id="path-help">Copy the path from API Explorer. Replace path parameters and append any query string.</p>
+        <label id="body-field" hidden>JSON body<textarea id="body" rows="5" spellcheck="false" placeholder='{"name": "Example"}'></textarea></label>
+        <div class="actions"><button id="send" disabled>Send request</button></div>
+      </form>
+    </section>
+    <section aria-labelledby="response-heading">
+      <h2 id="response-heading">Response</h2>
+      <p id="response-status" role="status">Waiting for a request</p>
+      <pre id="output" tabindex="0" aria-label="HTTP response body"></pre>
+    </section>
+  </main>
+</body>
+</html>
