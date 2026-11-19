@@ -44,3 +44,24 @@ Use an opaque session cookie with HttpOnly and SameSite=Lax so it is sent on
 the top-level OAuth callback. Set Secure for HTTPS. Use HTTPS outside local
 development. Keep token values, PKCE verifiers, and callback query strings
 out of application logs and browser responses.
+
+## Browser console
+
+The Connection form accepts a token name (a local label), grant type, regional
+access token URL, client ID, and client secret. For US East, the token URL is
+`https://login.mypurecloud.com/oauth/token`. Register the exact callback URI
+shown below the form in your Genesys Cloud OAuth client.
+
+- **Authorization Code with PKCE** runs on static HTTPS hosting, including
+  GitHub Pages. The secret field is disabled.
+- **Authorization Code** uses the client secret and requires the bundled Node.js
+  server. Start it with `node server.js` and open `http://localhost:8080/`.
+  For HTTPS hosting behind a reverse proxy, set `PORTAL_ORIGIN` to the public
+  origin (for example `https://portal.example.com`) and expose the portal
+  at the root of that origin. Route requests to a single Node.js instance
+  so each authorization callback reaches the process holding its pending grant.
+  The server clears pending client secrets after exchange or within ten minutes.
+
+After signing in, the console verifies the session via `GET /api/v2/users/me`.
+Tokens stay in browser memory for the console session. Use the request form to
+send API Explorer paths and optional JSON request bodies.
