@@ -2,7 +2,9 @@ import { parseTokenUrl, regions } from './oauth-regions.js';
 
 const transactionKey = 'genesys-api-console:oauth';
 const byId = (id) => document.getElementById(id);
-const redirectUri = new URL(location.pathname, location.origin).href;
+const pageUri = new URL(location.pathname, location.origin).href;
+const githubPages = location.hostname.endsWith('.github.io');
+const redirectUri = githubPages ? new URL('./', import.meta.url).href : pageUri;
 const tokenNameInput = byId('token-name');
 const grantInput = byId('grant');
 const tokenUrlInput = byId('token-url');
@@ -124,19 +126,33 @@ function syncGrant() {
   secretInput.required = confidential || credentials;
   if (!secretInput.required) secretInput.value = '';
   byId('scope-field').hidden = !credentials;
+  copyCallback.hidden = credentials;
   byId('grant-help').textContent = confidential
     ? `Register ${redirectUri} as the callback URI. This grant requires the Node.js portal server.`
     : credentials
       ? 'The client ID and secret are sent as a Basic Auth header. Client Credentials uses no callback URL.'
-      : `Register ${redirectUri} as the callback URI for your PKCE client.`;
+      : `In your Genesys Cloud OAuth client, choose Code Authorization / PKCE and add ${redirectUri} under Authorized redirect URIs. Use that client’s ID and your organization’s regional token URL.`;
   syncControls();
 }
+
+const copyCallback = document.createElement('button');
+copyCallback.type = 'button';
+copyCallback.textContent = 'Copy callback URL';
+byId('grant-help').after(copyCallback);
+copyCallback.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(redirectUri);
+    setStatus('Callback URL copied.');
+  } catch {
+    setStatus(`Copy this callback URL manually: ${redirectUri}`);
+  }
+});
 
 grantInput.addEventListener('change', syncGrant);
 syncGrant();
 
 async function detectConfidentialGrant() {
-  if (location.hostname.endsWith('.github.io')) return;
+  if (githubPages) return;
   try {
     const response = await fetch(codeEndpoint, {
       headers: { Accept: 'application/json' }, redirect: 'error',
@@ -200,7 +216,7 @@ byId('connect').addEventListener('submit', (event) => {
       return;
     }
     const state = randomValue();
-    const transaction = { tokenUrl, clientId, state, grant, name, expiresAt: Date.now() + 600_000 };
+    const transaction = { tokenUrl, clientId, redirectUri, state, grant, name, expiresAt: Date.now() + 600_000 };
     authorizationUrl.search = new URLSearchParams({
       client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state,
     });
@@ -228,7 +244,7 @@ async function exchangePkce(tokenUrl, transaction, code) {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
     body: new URLSearchParams({
       grant_type: 'authorization_code', client_id: transaction.clientId,
-      code, code_verifier: transaction.verifier, redirect_uri: redirectUri,
+      code, code_verifier: transaction.verifier, redirect_uri: transaction.redirectUri ?? pageUri,
     }),
   });
   if (!response.ok) throw new Error(`Token exchange failed (HTTP ${response.status}). Check the PKCE client and callback URI.`);
@@ -316,7 +332,7 @@ byId('request').addEventListener('submit', (event) => {
 
 const callback = new URLSearchParams(location.search);
 if (callback.has('code') || callback.has('error') || callback.has('state')) {
-  history.replaceState(null, '', redirectUri);
+  history.replaceState(null, '', pageUri);
   setStatus('Completing sign-in…');
   run(() => handleCallback(callback), setStatus);
 }
