@@ -8,6 +8,7 @@ const grantInput = byId('grant');
 const tokenUrlInput = byId('token-url');
 const secretInput = byId('secret');
 const codeEndpoint = './oauth/code';
+let confidentialAvailable = false;
 const clientInput = byId('client');
 const methodInput = byId('method');
 let connection;
@@ -42,7 +43,7 @@ function syncControls() {
   for (const input of [tokenNameInput, grantInput, tokenUrlInput, clientInput]) {
     input.disabled = locked;
   }
-  secretInput.disabled = locked || grantInput.value !== 'code';
+  secretInput.disabled = locked || !confidentialAvailable || grantInput.value !== 'code';
 }
 
 function clearConnection() {
@@ -113,7 +114,7 @@ async function run(task, reportError) {
 }
 
 function syncGrant() {
-  const confidential = grantInput.value === 'code';
+  const confidential = confidentialAvailable && grantInput.value === 'code';
   secretInput.required = confidential;
   if (!confidential) secretInput.value = '';
   byId('grant-help').textContent = confidential
@@ -124,6 +125,28 @@ function syncGrant() {
 
 grantInput.addEventListener('change', syncGrant);
 syncGrant();
+
+async function detectConfidentialGrant() {
+  if (location.hostname.endsWith('.github.io')) return;
+  try {
+    const response = await fetch(codeEndpoint, {
+      headers: { Accept: 'application/json' }, redirect: 'error',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok || !response.headers.get('Content-Type')?.startsWith('application/json')) return;
+    const capability = await response.json();
+    if (capability.authorizationCode !== true) return;
+    confidentialAvailable = true;
+    const option = byId('code-grant');
+    option.disabled = false;
+    option.textContent = 'Authorization Code';
+    syncGrant();
+  } catch {
+    // Static hosts continue to offer PKCE if the backend is unavailable.
+  }
+}
+
+void detectConfidentialGrant();
 
 async function confidentialRequest(payload) {
   const response = await fetch(codeEndpoint, {
@@ -157,6 +180,7 @@ byId('connect').addEventListener('submit', (event) => {
       client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state,
     });
     if (grant === 'code') {
+      if (!confidentialAvailable) throw new Error('Select Authorization Code with PKCE on this host.');
       const clientSecret = secretInput.value;
       secretInput.value = '';
       const { ticket } = await confidentialRequest({
