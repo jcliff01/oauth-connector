@@ -73,3 +73,11 @@ shown below the form in your Genesys Cloud OAuth client.
 For user sign-in grants, the console verifies the session via `GET /api/v2/users/me`.
 Tokens stay in browser memory for the console session. Use the request form to
 send API Explorer paths and optional JSON request bodies.
+
+## Project status
+
+This is a development connector and example console. Validate the OAuth configuration and requested scopes in a development organization before using it with production accounts. Remove tokens, session cookies, and tenant identifiers from shared logs.
+
+## License
+
+Project code is available under the [MIT License](LICENSE).
