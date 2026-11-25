@@ -5,6 +5,8 @@ Two things in one repository:
 - **An API console** you open in a web browser. You sign in to Genesys Cloud, then send requests to the Genesys Cloud Platform API and see the answers, without writing any code.
 - **A small code module** (`genesys-cloud.js`) that lets a website sign its users in to Genesys Cloud and call the API for them. It uses OAuth 2.0 Authorization Code with PKCE, and keeps tokens on the server.
 
+![The API console: connection settings, an API request and its response](docs/screenshot.png)
+
 > **Status: development tool.** Try it with a development or test Genesys Cloud organization before using it with production accounts.
 
 ## Before you start: an OAuth client in Genesys Cloud
