@@ -1,5 +1,10 @@
 # Genesys Cloud OAuth connector
 
+**[▶ Open the Genesys Cloud API Console](https://jcliff01.github.io/oauth-connector/)** · [Troubleshooting APIs](https://jcliff01.github.io/oauth-connector/troubleshooting.html)
+
+No install needed: open the console, pick your region's token URL, enter your
+PKCE client ID, and select **Connect to Genesys Cloud**.
+
 A dependency-free Node.js 22+ module for websites that call the Genesys Cloud
 Platform API on behalf of a signed-in user. It implements OAuth 2.0
 Authorization Code with S256 PKCE. Tokens stay in the website backend.
