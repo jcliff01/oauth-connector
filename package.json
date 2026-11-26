@@ -4,5 +4,10 @@
   "private": true,
   "type": "module",
   "exports": "./genesys-cloud.js",
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
 }
