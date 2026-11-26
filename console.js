@@ -309,6 +309,23 @@ function syncBodyField() {
     : 'Enter valid JSON or leave this blank to send the request without a body.';
 }
 
+// A request chosen on the troubleshooting page, kept in this tab so it survives sign-in.
+const draftKey = 'genesys-api-console:draft';
+try {
+  const draft = JSON.parse(sessionStorage.getItem(draftKey) ?? 'null');
+  if (draft && [...methodInput.options].some(o => o.value === draft.method) && typeof draft.path === 'string') {
+    methodInput.value = draft.method;
+    byId('path').value = draft.path;
+    byId('body').value = typeof draft.body === 'string' ? draft.body : '';
+  }
+} catch { /* Ignore a malformed draft. */ }
+function saveDraft() {
+  sessionStorage.setItem(draftKey, JSON.stringify({
+    method: methodInput.value, path: byId('path').value, body: byId('body').value,
+  }));
+}
+for (const input of [methodInput, byId('path'), byId('body')]) input.addEventListener('input', saveDraft);
+
 methodInput.addEventListener('change', syncBodyField);
 syncBodyField();
 byId('request').addEventListener('submit', (event) => {

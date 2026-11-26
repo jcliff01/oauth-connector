@@ -4,193 +4,113 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <title>Top 25 Troubleshooting APIs | Genesys Cloud</title>
+  <title>Troubleshooting queries | Genesys Cloud API Console</title>
   <link rel="stylesheet" href="./console.css">
   <style>
     main { max-width: 1100px; }
     nav { display: flex; gap: 16px; flex-wrap: wrap; }
-    .intro { margin-bottom: 18px; max-width: 76ch; }
-    .endpoint-list { padding-left: 1.65rem; margin: 0; }
-    .endpoint-list li { padding: 12px 0 12px 6px; border-bottom: 1px solid #2b405c; }
-    .endpoint-list li:last-child { border-bottom: 0; }
-    .endpoint-list h3 { display: inline; margin: 0; font-size: 1rem; }
-    .category { color: #b4c5dc; font-size: .85rem; margin-left: .6rem; }
-    .endpoint { display: block; margin: .2rem 0; color: #9ce5ff; overflow-wrap: anywhere; }
-    details { margin-top: 14px; }
-    summary { cursor: pointer; }
-    pre { margin-top: 6px; }
-    footer { margin: 18px 0; }
+    .intro { max-width: 78ch; }
+    .window { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-top: 12px; }
+    .window input { min-width: 15rem; }
+    .group-note { margin: -6px 0 8px; }
+    .list { list-style: none; padding: 0; margin: 0; counter-reset: q; }
+    .list li { padding: 12px 0; border-bottom: 1px solid #2b405c; display: grid; gap: 4px; }
+    .list li:last-child { border-bottom: 0; }
+    .list h3 { margin: 0; font-size: 1rem; }
+    .endpoint { color: #9ce5ff; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: .9rem; }
+    .method { font-weight: 700; margin-right: .4rem; }
+    .caution { color: #ffcf7a; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .row button { padding: 4px 10px; font-size: .85rem; }
+    details pre { margin-top: 6px; min-height: 0; }
+    summary { cursor: pointer; font-size: .85rem; color: #b4c5dc; }
+    footer p { margin: 18px 0; }
   </style>
+  <script type="module">
+    import { draftKey, groups } from './troubleshooting.js';
+
+    const make = (tag, props, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const start = document.getElementById('start');
+    const end = document.getElementById('end');
+
+    // datetime-local works in local time; the API wants UTC.
+    const toLocal = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    const now = new Date();
+    end.value = toLocal(now);
+    start.value = toLocal(new Date(now.getTime() - 30 * 60_000));
+    const interval = () => {
+      const s = new Date(start.value), e = new Date(end.value);
+      if (!(s < e)) return null;
+      return `${s.toISOString().replace('.000', '')}/${e.toISOString().replace('.000', '')}`;
+    };
+
+    const bodies = [];
+    function render() {
+      const w = interval() ?? 'START/END';
+      document.getElementById('window-help').textContent = interval()
+        ? `Bodies below use ${w} (UTC).` : 'The start must be before the end.';
+      for (const { query, pre } of bodies) pre.textContent = JSON.stringify(query.body(w), null, 2);
+    }
+
+    const sections = document.getElementById('groups');
+    for (const group of groups) {
+      const id = group.name.toLowerCase().replace(/\W+/g, '-');
+      const list = make('ol', { className: 'list' });
+      const section = make('section', { ariaLabel: group.name }, make('h2', { id, textContent: group.name }));
+      if (group.note) section.append(make('p', { className: 'group-note', textContent: group.note }));
+      section.append(list);
+      for (const query of group.queries) {
+        const item = make('li', {},
+          make('h3', { textContent: query.title }),
+          make('code', { className: 'endpoint' }, make('span', { className: 'method', textContent: query.method }), query.path),
+          make('p', { className: query.caution ? 'caution' : '', textContent: (query.caution ? 'Caution: ' : '') + query.why }));
+        let pre;
+        if (query.body) {
+          pre = make('pre');
+          bodies.push({ query, pre });
+          item.append(make('details', {}, make('summary', { textContent: 'Request body' }), pre));
+        }
+        const tryIt = make('button', { type: 'button', textContent: 'Try in console' });
+        tryIt.addEventListener('click', () => {
+          sessionStorage.setItem(draftKey, JSON.stringify({ method: query.method, path: query.path, body: pre?.textContent ?? '' }));
+          location.assign('./#request-heading');
+        });
+        const copy = make('button', { type: 'button', textContent: 'Copy path' });
+        copy.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(query.path); copy.textContent = 'Copied'; }
+          catch { copy.textContent = 'Copy failed'; }
+          setTimeout(() => { copy.textContent = 'Copy path'; }, 1500);
+        });
+        item.append(make('div', { className: 'row' }, tryIt, copy));
+        list.append(item);
+      }
+      sections.append(section);
+    }
+    start.addEventListener('input', render);
+    end.addEventListener('input', render);
+    render();
+  </script>
 </head>
 <body>
   <main>
     <header>
-      <h1>Top 25 Genesys Cloud troubleshooting APIs</h1>
+      <h1>Troubleshooting queries</h1>
       <nav aria-label="Related tools">
         <a href="./">API Console</a>
-        <a href="https://developer.genesys.cloud/devapps/api-explorer">Genesys API Explorer</a>
+        <a href="https://developer.genesys.cloud/devapps/api-explorer" target="_blank" rel="noopener noreferrer">API Explorer ↗</a>
       </nav>
     </header>
-    <p class="intro">Ranked by where I’d start during a contact center incident. Pick the endpoint that fits the symptom, copy its path into the API Console, and replace any ID placeholders. For POST queries, add the JSON body in the console. Access depends on your token’s scopes, permissions, and division grants.</p>
-    <section aria-labelledby="endpoints">
-      <h2 id="endpoints">Troubleshooting endpoints</h2>
-      <ol class="endpoint-list">
-        <li>
-          <h3>Confirm the signed-in identity</h3><span class="category">Access</span>
-          <code class="endpoint">GET /api/v2/users/me</code>
-          <p>Use first to verify which user the token represents.</p>
-        </li>
-        <li>
-          <h3>Confirm the organization</h3><span class="category">Access</span>
-          <code class="endpoint">GET /api/v2/organizations/me</code>
-          <p>Check that your connection targets the expected Genesys Cloud organization.</p>
-        </li>
-        <li>
-          <h3>Find a failed or missing interaction</h3><span class="category">Interactions</span>
-          <code class="endpoint">POST /api/v2/analytics/conversations/details/query</code>
-          <p>Query a narrow time window to recover the conversation ID and inspect participant and segment history.</p>
-        </li>
-        <li>
-          <h3>Trace a known interaction</h3><span class="category">Interactions</span>
-          <code class="endpoint">GET /api/v2/analytics/conversations/{conversationId}/details</code>
-          <p>Inspect historical routing, disconnect types, segment timing and media metrics where available.</p>
-        </li>
-        <li>
-          <h3>Inspect an active interaction</h3><span class="category">Interactions</span>
-          <code class="endpoint">GET /api/v2/conversations/{conversationId}</code>
-          <p>Check participant and communication state during a live incident.</p>
-        </li>
-        <li>
-          <h3>Check the current queue backlog</h3><span class="category">Routing</span>
-          <code class="endpoint">POST /api/v2/analytics/queues/observations/query</code>
-          <p>Compare waiting, interacting and agent observations for affected queues.</p>
-        </li>
-        <li>
-          <h3>Inspect queue configuration</h3><span class="category">Routing</span>
-          <code class="endpoint">GET /api/v2/routing/queues/{queueId}</code>
-          <p>Check routing settings, media settings and the in-queue flow reference.</p>
-        </li>
-        <li>
-          <h3>Check whether agents are joined</h3><span class="category">Routing</span>
-          <code class="endpoint">GET /api/v2/routing/queues/{queueId}/members</code>
-          <p>Verify queue membership and each agent’s joined state.</p>
-        </li>
-        <li>
-          <h3>Check the agent’s routing status</h3><span class="category">Agents</span>
-          <code class="endpoint">GET /api/v2/users/{userId}/routingstatus</code>
-          <p>Distinguish IDLE, INTERACTING, NOT_RESPONDING and OFF_QUEUE when investigating missed offers.</p>
-        </li>
-        <li>
-          <h3>Check the agent’s presence</h3><span class="category">Agents</span>
-          <code class="endpoint">GET /api/v2/users/{userId}/presences/purecloud</code>
-          <p>Compare their current Genesys Cloud presence with their ACD routing status.</p>
-        </li>
-        <li>
-          <h3>Check the agent’s selected station</h3><span class="category">Telephony</span>
-          <code class="endpoint">GET /api/v2/users/{userId}/station</code>
-          <p>Confirm station association when an agent cannot place or receive calls.</p>
-        </li>
-        <li>
-          <h3>Find the affected SIP trunk</h3><span class="category">Telephony</span>
-          <code class="endpoint">GET /api/v2/telephony/providers/edges/trunks</code>
-          <p>Inventory trunks and identify the trunk ID for the affected voice path.</p>
-        </li>
-        <li>
-          <h3>Inspect SIP trunk metrics</h3><span class="category">Telephony</span>
-          <code class="endpoint">GET /api/v2/telephony/providers/edges/trunks/{trunkId}/metrics</code>
-          <p>Check available trunk metrics while investigating carrier or call-capacity issues.</p>
-        </li>
-        <li>
-          <h3>Check Edge availability</h3><span class="category">Telephony</span>
-          <code class="endpoint">GET /api/v2/telephony/providers/edges</code>
-          <p>Inventory Edges and inspect current status for deployments that expose them.</p>
-        </li>
-        <li>
-          <h3>Inspect Edge metrics</h3><span class="category">Telephony</span>
-          <code class="endpoint">GET /api/v2/telephony/providers/edges/{edgeId}/metrics</code>
-          <p>Check reported health metrics for the Edge involved in a voice incident.</p>
-        </li>
-        <li>
-          <h3>Verify phone configuration</h3><span class="category">Telephony</span>
-          <code class="endpoint">GET /api/v2/telephony/providers/edges/phones/{phoneId}</code>
-          <p>Check the phone definition and site association when an endpoint fails.</p>
-        </li>
-        <li>
-          <h3>Check the inbound call route</h3><span class="category">Routing</span>
-          <code class="endpoint">GET /api/v2/architect/ivrs/{ivrId}</code>
-          <p>Verify schedule and flow references for the inbound number.</p>
-        </li>
-        <li>
-          <h3>Confirm the Architect flow</h3><span class="category">Routing</span>
-          <code class="endpoint">GET /api/v2/flows/{flowId}</code>
-          <p>Check flow type and published-version information when callers hit an unexpected path.</p>
-        </li>
-        <li>
-          <h3>Investigate after-hours misrouting</h3><span class="category">Routing</span>
-          <code class="endpoint">GET /api/v2/architect/schedulegroups/{scheduleGroupId}</code>
-          <p>Check time zone and open, closed and holiday schedule associations.</p>
-        </li>
-        <li>
-          <h3>Measure the incident’s impact</h3><span class="category">Analytics</span>
-          <code class="endpoint">POST /api/v2/analytics/conversations/aggregates/query</code>
-          <p>Compare call volume, abandons and wait time across queues and time buckets.</p>
-        </li>
-        <li>
-          <h3>Reconstruct an agent’s timeline</h3><span class="category">Analytics</span>
-          <code class="endpoint">POST /api/v2/analytics/users/details/query</code>
-          <p>Inspect historical presence and routing status across the incident window.</p>
-        </li>
-        <li>
-          <h3>Investigate missing access</h3><span class="category">Access</span>
-          <code class="endpoint">GET /api/v2/authorization/subjects/{subjectId}</code>
-          <p>Review role and division grants for an affected authorization subject.</p>
-        </li>
-        <li>
-          <h3>Inspect a failing data action</h3><span class="category">Integrations</span>
-          <code class="endpoint">GET /api/v2/integrations/actions/{actionId}</code>
-          <p>Confirm the action’s published definition and associated integration.</p>
-        </li>
-        <li>
-          <h3>Find configuration changes near the incident</h3><span class="category">Audit</span>
-          <code class="endpoint">POST /api/v2/audits/query</code>
-          <p>Start an audit query for the relevant service and time window to identify changes and actors.</p>
-        </li>
-        <li>
-          <h3>Read completed audit results</h3><span class="category">Audit</span>
-          <code class="endpoint">GET /api/v2/audits/query/{transactionId}/results</code>
-          <p>Retrieve audit records using the transaction ID after the query completes.</p>
-        </li>
-      </ol>
+    <section aria-labelledby="how">
+      <h2 id="how">How to use this page</h2>
+      <p class="intro">Start with <strong>Test the connection</strong>, then look up the IDs you need. <strong>Try in console</strong> fills in the console’s request form; replace any CAPITAL placeholder before sending. If you aren’t connected yet, the request stays filled in while you sign in. What you can read depends on the token’s scopes, roles and divisions.</p>
+      <div class="window">
+        <label>Incident start (your local time)<input id="start" type="datetime-local"></label>
+        <label>Incident end<input id="end" type="datetime-local"></label>
+      </div>
+      <p id="window-help" role="status"></p>
     </section>
-    <section aria-labelledby="queries">
-      <h2 id="queries">Example query bodies</h2>
-      <details>
-        <summary>#3 and #21 · Search a 15-minute incident window</summary>
-        <p>Replace the UTC timestamps with your incident window. The example returns the first page.</p>
-        <pre><code>{
-  "interval": "2026-11-19T07:00:00Z/2026-11-19T07:15:00Z",
-  "paging": { "pageSize": 25, "pageNumber": 1 }
-}</code></pre>
-      </details>
-      <details>
-        <summary>#6 · Check a single queue’s backlog</summary>
-        <p>Replace QUEUE_ID with the affected queue’s ID.</p>
-        <pre><code>{
-  "filter": {
-    "type": "or",
-    "predicates": [
-      { "dimension": "queueId", "value": "QUEUE_ID" }
-    ]
-  },
-  "metrics": ["oWaiting", "oInteracting"]
-}</code></pre>
-      </details>
-      <details>
-        <summary>#24 and #25 · Run and retrieve an audit query</summary>
-        <p>Use the <code>transactionId</code> returned by #24 to check progress at <code>GET /api/v2/audits/query/{transactionId}</code>. When the query completes, use #25 for the records.</p>
-      </details>
-    </section>
-    <footer><p>Endpoint methods and paths checked against the <a href="https://pypi.org/project/PureCloudPlatformClientV2/269.0.0/">Genesys Cloud Python SDK 269.0.0</a>.</p></footer>
+    <div id="groups"></div>
+    <footer><p>Methods, paths and parameters checked against the <a href="https://pypi.org/project/PureCloudPlatformClientV2/269.0.0/">Genesys Cloud Python SDK 269.0.0</a> in November 2026. Keep the incident window short for faster analytics answers.</p></footer>
   </main>
 </body>
 </html>

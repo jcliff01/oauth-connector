@@ -69,7 +69,7 @@ The server only answers this computer. To use a different port, set `PORT` first
 | `403` from a request | You're signed in, but the OAuth client's scopes or roles don't allow that request. |
 | `npm` or `node` not recognized | Open a new terminal after installing Node.js. |
 
-The console's **[troubleshooting page](https://jcliff01.github.io/oauth-connector/troubleshooting.html)** covers more Genesys error messages.
+The **[troubleshooting queries page](https://jcliff01.github.io/oauth-connector/troubleshooting.html)** has ready-made API requests for testing a connection and investigating contact center incidents. **Try in console** fills them into the console, with time windows set from the incident start and end you choose.
 
 ## For developers: the connector module
 
