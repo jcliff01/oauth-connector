@@ -20,6 +20,7 @@ const assets = new Map([
   ['/troubleshooting.html', ['troubleshooting.html', 'text/html']],
   ['/console.css', ['console.css', 'text/css']],
   ['/console.js', ['console.js', 'text/javascript']],
+  ['/troubleshooting.js', ['troubleshooting.js', 'text/javascript']],
   ['/oauth-regions.js', ['oauth-regions.js', 'text/javascript']],
 ]);
 
